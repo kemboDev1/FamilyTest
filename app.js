@@ -8,34 +8,22 @@
 (function () {
     "use strict";
 
-    // Application Storage Key
-    const STORAGE_KEY = "family_friends_quiz_app_v3";
-
     // Available Icons / Avatars for Users
     const SYSTEM_AVATARS = [
         "👨‍💻", "👩‍💻", "🧙‍♂️", "🧚‍♀️", "🦸‍♂️", "🕵️‍♂️", "🤖", "👽",
         "🦊", "🦉", "🦁", "🐼", "🚀", "👑", "🎯", "💎"
     ];
 
-    // Initial Database Schema
-    const defaultDatabase = {
-        theme: "light",
-        currentUserId: null,
-        profiles: [],
-        tests: [],
-        results: [],
-        notifications: []
-    };
+    let state = window.FamilyService.loadState();
 
-    // Load or initialize state
-    let state = (() => {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-        return { ...defaultDatabase, ...(saved || {}) };
-    })();
+    const savedUser = state.profiles.find(profile => profile.id === state.currentUserId);
+    if (state.currentUserId && (!savedUser || !savedUser.passwordHash || savedUser.isBanned)) {
+        state.currentUserId = null;
+    }
 
     // Helper functions for state modification
     function saveState() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        window.FamilyService.saveState(state);
     }
 
     function generateUniqueId() {
@@ -49,6 +37,63 @@
             .replace(/>/g, "&gt;")
             .replace(/\"/g, "&quot;")
             .replace(/'/g, "&#039;");
+    }
+
+    function getAiQuestionBank(topic) {
+        const normalizedTopic = topic.toLocaleLowerCase();
+        const makeChoiceQuestion = (id, text, options, correctOptionIndex) => {
+            const shuffledOptions = window.FamilyService.shuffleItems(options.map((option, index) => ({ option, index })));
+            return {
+                id,
+                type: "multiple",
+                text,
+                options: shuffledOptions.map(({ option }) => ({ text: option, evaluationNote: "" })),
+                correctOptionIndex: shuffledOptions.findIndex(({ index }) => index === correctOptionIndex)
+            };
+        };
+
+        if (/pet|animal|hayvon|mushuk|it\b|kuchuk|parrand|qush/.test(normalizedTopic)) {
+            return [
+                ["pet-water", "Uy hayvoniga toza suvni doimiy berish nima uchun muhim?", ["Sog'lom suvsizlanishning oldini olish uchun", "Faqat junini yaltiroq qilish uchun", "Uxlash vaqtini uzaytirish uchun", "Ovqat o'rnini bosishi uchun"], 0],
+                ["pet-vet", "Hayvon o'zini yomon his qilsa, eng to'g'ri yo'l qaysi?", ["Veterinar bilan maslahatlashish", "Odam dorisini berish", "Bir necha kun kutish", "Ovqatini butunlay to'xtatish"], 0],
+                ["pet-food", "Uy hayvoni uchun ovqat tanlashda nimaga qarash kerak?", ["Yoshi va turiga mosligiga", "Faqat qadoq rangiga", "Eng arzonligiga", "Faqat hidiga"], 0],
+                ["pet-safety", "Notanish hayvonga yaqinlashishda nima qilish kerak?", ["Avval egasidan ruxsat so'rash", "Birdan quchoqlash", "Qattiq tovush chiqarish", "Ovqatni majburan berish"], 0],
+                ["pet-cat", "Mushukning tirnoqlarini tirnashi uchun uyda nima foydali?", ["Tirnash ustuni", "Shisha idish", "Yopiq quti", "Yumshoq yostiq"], 0],
+                ["pet-dog", "It bilan sayrda xavfsizlik uchun nima muhim?", ["Mos tasma va nazorat", "Uni yolg'iz qo'yib yuborish", "Issiqda uzoq yugurtirish", "Suv bermaslik"], 0],
+                ["pet-clean", "Hayvon yashaydigan joyni toza saqlash nimaga yordam beradi?", ["Kasallik va noqulay hidlarni kamaytirishga", "Hayvonni tezroq o'stirishga", "Ko'proq ovqat yeyishiga", "Rangini o'zgartirishga"], 0],
+                ["pet-body", "Hayvon bezovta bo'lib, yashirinsa, nima qilish ma'qul?", ["Unga tinch joy berib, holatini kuzatish", "Majburan ko'tarish", "Orqasidan quvish", "Baland musiqa qo'yish"], 0],
+                ["pet-exercise", "Ko'pchilik uy hayvonlariga har kuni nima kerak?", ["Turiga mos harakat va mashg'ulot", "Kun bo'yi yolg'iz qolish", "Cheksiz shirinlik", "Faqat uxlash"], 0],
+                ["pet-care", "Hayvonni oilaga olishdan avval nimani o'ylab ko'rish kerak?", ["Vaqt, xarajat va uzoq muddatli parvarishni", "Faqat uning suratini", "Faqat bugungi kayfiyatni", "Faqat o'yinchoqlar sonini"], 0]
+            ].map(([id, text, options, correct]) => makeChoiceQuestion(id, text, options, correct));
+        }
+
+        if (/family|oila|ota|ona|aka|uka|opa|singil|do'st|friend/.test(normalizedTopic)) {
+            return [
+                ["family-memory", `${topic} bilan bog'liq eng quvnoq xotirang qaysi?`],
+                ["family-tradition", `${topic} bilan birga davom ettirishni istaydigan an'ana qaysi?`],
+                ["family-strength", `${topic}dagi qaysi fazilatni eng ko'p qadrlaysan?`],
+                ["family-day", `${topic} bilan ideal dam olish kuning qanday o'tardi?`],
+                ["family-laugh", `${topic} bilan birga seni eng ko'p nima kuldiradi?`],
+                ["family-thanks", `${topic}ga aytmoqchi bo'lgan minnatdorchiliging nima?`],
+                ["family-trip", `${topic} bilan qaysi joyga sayohat qilishni xohlarding?`],
+                ["family-skill", `${topic}dan o'rgangan eng foydali narsang nima?`],
+                ["family-song", `${topic}ni eslatadigan qo'shiq yoki film qaysi?`],
+                ["family-surprise", `${topic} uchun qanday kichik syurpriz tayyorlarding?`]
+            ].map(([id, text]) => ({ id, type: "text", text, options: [], correctOptionIndex: 0 }));
+        }
+
+        return [
+            ["topic-source", `${topic} haqida yangi ma'lumotni tekshirishda qaysi manbaga ko'proq ishonish kerak?`, ["Mutaxassis yoki ishonchli manbaga", "Muallifi noma'lum xabarga", "Faqat ko'p ulashilgan postga", "Tasodifiy taxminga"], 0],
+            ["topic-conflict", `${topic} bo'yicha ikki manba zid gapirsa, eng yaxshi qadam qaysi?`, ["Dalil, sana va muallif tajribasini solishtirish", "Birinchi ko'rgan fikrni tanlash", "Ikkalasini ham tekshirmaslik", "Eng keskin sarlavhaga ishonish"], 0],
+            ["topic-practice", `${topic}ni yaxshiroq eslab qolishga qaysi usul yordam beradi?`, ["Oraliq bilan takrorlash va o'z so'zing bilan tushuntirish", "Bir marta shoshilib o'qish", "Faqat sarlavhani yodlash", "Chalg'ib turib tinglash"], 0],
+            ["topic-question", `${topic} haqida yaxshi test savoli qanday bo'ladi?`, ["Aniq va tushunarli, bitta asosiy javobli", "Bir-biriga aloqasiz uchta savol", "Javobi noma'lum taxmin", "Juda uzun va noaniq"], 0],
+            ["topic-example", `${topic}ni tushunganingni ko'rsatadigan eng yaxshi belgi nima?`, ["G'oyani misol bilan tushuntira olish", "Faqat atamani ko'rgan bo'lish", "Javobni taxmin qilish", "Savoldan qochish"], 0],
+            ["topic-plan", `${topic}ni o'rganishni boshlash uchun foydali birinchi qadam qaysi?`, ["Maqsadni belgilab, asosiy tushunchalarni aniqlash", "Barcha tafsilotni birdan yodlash", "Faqat tasodifiy video ko'rish", "Rejasiz ko'plab havola ochish"], 0],
+            ["topic-evidence", `${topic} haqidagi da'voni baholashda nimaga qarash kerak?`, ["Dalil va manbaning ishonchliligiga", "Faqat yozuvdagi undovlarga", "Muallifning obunachilari soniga", "Xabarning rangiga"], 0],
+            ["topic-summary", `${topic}ni o'rganganingdan keyin bilimni sinashning yaxshi usuli qaysi?`, ["Asosiy fikrni eslab, o'z so'zing bilan bayon qilish", "Matnni tushunmay ko'chirish", "Faqat rasmlarga qarash", "Darhol boshqa mavzuga o'tish"], 0],
+            ["topic-improve", `${topic} bo'yicha xato qilgan javobdan keyin nima qilish foydali?`, ["Sababini ko'rib chiqib, to'g'ri tushunchani qayta mashq qilish", "Xatoni yashirish", "Savolni umuman unutish", "Faqat tezroq taxmin qilish"], 0],
+            ["topic-share", `${topic} haqidagi foydali bilimni boshqaga yetkazishda nima muhim?`, ["Aniq misol va sodda izoh ishlatish", "Ataylab chalkashtirish", "Manbani yashirish", "Tekshirilmagan gapni fakt deyish"], 0]
+        ].map(([id, text, options, correct]) => makeChoiceQuestion(id, text, options, correct));
     }
 
     // Temporary storage for test creation builder
@@ -92,6 +137,7 @@
 
     let toastQueue = [];
     let pendingConfirm = null;
+    let authMode = "login";
 
     function renderToasts() {
         if (!toastQueue.length) return "";
@@ -182,6 +228,21 @@
         // Apply global theme
         document.documentElement.setAttribute("data-theme", state.theme || "light");
 
+        if (!state.currentUserId) {
+            root.innerHTML = window.FamilyLogin.render(authMode);
+            window.FamilyLogin.bind(window.authenticateUser);
+            return;
+        }
+
+        const activeProfile = state.profiles.find(profile => profile.id === state.currentUserId);
+        if (!activeProfile || activeProfile.isBanned) {
+            state.currentUserId = null;
+            saveState();
+            root.innerHTML = window.FamilyLogin.render(authMode);
+            window.FamilyLogin.bind(window.authenticateUser);
+            return;
+        }
+
         // Shell Structure
         root.innerHTML = `
             <div class="app-shell">
@@ -212,10 +273,10 @@
                                     <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"/><path d="M12 17V9"/><path d="M7 9l5-5 5 5"/><path d="M5 18h14"/></svg></span>
                                     <span>Natijalar</span>
                                 </a>
-                                <a class="nav-item ${currentRoute === 'admin' ? 'active' : ''}" data-route="admin">
+                                ${activeProfile.role === 'admin' ? `<a class="nav-item ${currentRoute === 'admin' ? 'active' : ''}" data-route="admin">
                                     <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6"/><path d="M12 15v6"/><path d="M3 12h6"/><path d="M15 12h6"/><circle cx="12" cy="12" r="3"/></svg></span>
                                     <span>Admin</span>
-                                </a>
+                                </a>` : ''}
                                 <a class="nav-item ${currentRoute === 'profiles' ? 'active' : ''}" data-route="profiles">
                                     <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1"/><circle cx="10" cy="7" r="4"/><path d="M20 18v-1a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
                                     <span>Profillar</span>
@@ -230,14 +291,7 @@
                                 ${renderCurrentUserBadge()}
                             </div>
                             <div class="topbar-actions">
-                                <select id="global-profile-switcher" class="profile-select">
-                                    <option value="">-- Profil Tanlang --</option>
-                                    ${state.profiles.map(p => `
-                                        <option value="${p.id}" ${state.currentUserId === p.id ? 'selected' : ''}>
-                                            ${p.avatar}${p.name}
-                                        </option>
-                                    `).join('')}
-                                </select>
+                                <button class="btn btn-secondary logout-button" onclick="window.logoutUser()" title="Hisobdan chiqish">Chiqish</button>
                                 <button id="theme-toggle-btn" class="theme-toggle-btn" title="Mavzuni o'zgartirish">
                                     ${state.theme === 'dark' ? '☀️' : '🌙'}
                                 </button>
@@ -256,6 +310,50 @@
 
         bindGlobalEvents();
     }
+
+    async function createUserAccount(name, password, avatar = SYSTEM_AVATARS[0]) {
+        const newProfile = await window.FamilyUsers.createAccount(state, name, password, avatar);
+        state.profiles.push(newProfile);
+        state.currentUserId = newProfile.id;
+        addNotification(`${newProfile.avatar} ${newProfile.name} tizimga kirdi`, "success");
+        saveState();
+        return newProfile;
+    }
+
+    window.toggleAuthMode = function () {
+        authMode = authMode === "login" ? "register" : "login";
+        renderApp();
+    };
+
+    window.authenticateUser = async function (event) {
+        event.preventDefault();
+        const name = document.getElementById("auth-name").value.trim();
+        const password = document.getElementById("auth-password").value;
+        const message = document.getElementById("auth-message");
+
+        try {
+            if (authMode === "register") {
+                await createUserAccount(name, password);
+            } else {
+                const profile = await window.FamilyUsers.authenticate(state, name, password);
+                state.currentUserId = profile.id;
+                addNotification(`${profile.avatar} ${profile.name} tizimga kirdi`, "success");
+                saveState();
+            }
+
+            window.location.hash = window.location.pathname.toLocaleLowerCase().endsWith("adminpanel.html") ? "admin" : "tests";
+            renderApp();
+        } catch (error) {
+            message.textContent = error.message || "Kirish amalga oshmadi.";
+        }
+    };
+
+    window.logoutUser = function () {
+        state.currentUserId = null;
+        authMode = "login";
+        saveState();
+        renderApp();
+    };
 
     function renderCurrentUserBadge() {
         const activeUser = state.profiles.find(p => p.id === state.currentUserId);
@@ -287,7 +385,9 @@
             case "results":
                 return renderResultsView();
             case "admin":
-                return renderAdminView();
+                return window.FamilyUsers.isAdmin(state, state.currentUserId)
+                    ? renderAdminView()
+                    : `<div class="card"><h2>Ruxsat yo'q</h2><p>Admin panel faqat admin hisobiga ochiq.</p></div>`;
             case "profiles":
                 return renderProfilesView();
             default:
@@ -454,6 +554,22 @@
         return `
             <div class="card">
                 <h2 style="margin-bottom: 20px;">Create in Studio</h2>
+
+                <section class="ai-assistant" aria-labelledby="ai-assistant-title">
+                    <div class="ai-assistant-heading">
+                        <span class="ai-mark">✦</span>
+                        <div>
+                            <h3 id="ai-assistant-title">AI test yordamchisi</h3>
+                            <p>Mavzuni kiriting, savollar avtomatik tayyorlanadi.</p>
+                        </div>
+                    </div>
+                    <div class="ai-assistant-controls">
+                        <input id="ai-topic" class="form-control" maxlength="60" placeholder="Masalan: Mushuklar, Oila, Do'stlik">
+                        <input id="ai-question-count" class="form-control ai-count" type="number" min="2" max="10" value="5" aria-label="Savollar soni">
+                        <button class="btn btn-primary" type="button" onclick="window.generateAiQuestions()">Savollar yaratish</button>
+                    </div>
+                    <p class="ai-disclaimer">Offline yordamchi savol shablonlaridan foydalanadi. Savollarni nashrdan oldin tahrirlashingiz mumkin.</p>
+                </section>
                 
                 <div class="form-group">
                     <label>Test Nomi</label>
@@ -691,6 +807,7 @@
 
     function renderAdminView() {
         const user = state.profiles.find(p => p.id === state.currentUserId);
+        const registeredUsers = state.profiles.filter(profile => Boolean(profile.passwordHash));
 
         const profileStats = state.profiles.map(profile => {
             const tests = state.tests.filter(t => t.ownerId === profile.id).length;
@@ -716,7 +833,7 @@
                     <div class="admin-metrics">
                         <div class="mini-stat">
                             <span>Users</span>
-                            <strong>${state.profiles.length}</strong>
+                            <strong>${registeredUsers.length}</strong>
                         </div>
                         <div class="mini-stat">
                             <span>Tests</span>
@@ -745,8 +862,10 @@
                 </div>
             </div>
 
+            <p class="admin-local-note">Hisoblar va kirish vaqti shu brauzerda saqlanadi; umumiy, ko'p qurilmali monitoring uchun backend kerak.</p>
+
             <div class="card">
-                <h3>Userlar va testlar</h3>
+                <h3>Foydalanuvchilar (${registeredUsers.length})</h3>
                 <div class="profile-admin-list">
                     ${profileStats.map(item => `
                         <div class="profile-admin-row">
@@ -754,12 +873,17 @@
                                 <span class="leaderboard-avatar">${item.profile.avatar}</span>
                                 <div>
                                     <strong>${escapeHtml(item.profile.name)}</strong>
-                                    <small>${item.tests} ta test • ${item.plays} ta o'ynagan</small>
+                                    <small>${item.profile.role === 'admin' ? 'Admin' : item.profile.passwordHash ? 'User' : 'Eski profil'} · Oxirgi kirish: ${item.profile.lastLoginAt ? new Date(item.profile.lastLoginAt).toLocaleString() : 'hali kirmagan'} · ${item.profile.warningCount || 0} ogohlantirish</small>
                                 </div>
                             </div>
                             <div class="profile-admin-badges">
                                 <span class="badge badge-primary">${item.tests} tests</span>
                                 <span class="badge badge-success">${item.plays} plays</span>
+                                <span class="badge ${item.profile.isBanned ? 'badge-warning' : 'badge-success'}">${item.profile.isBanned ? 'Bloklangan' : 'Faol'}</span>
+                                ${item.profile.id !== state.currentUserId && item.profile.passwordHash ? `
+                                    <button class="btn btn-secondary admin-action-button" onclick="window.moderateUser('${item.profile.id}', 'warn')">Ogohlantirish</button>
+                                    <button class="btn ${item.profile.isBanned ? 'btn-primary' : 'btn-danger'} admin-action-button" onclick="window.moderateUser('${item.profile.id}', '${item.profile.isBanned ? 'unban' : 'ban'}')">${item.profile.isBanned ? 'Blokdan chiqarish' : 'Bloklash'}</button>
+                                ` : ''}
                             </div>
                         </div>
                     `).join('') || '<p style="color: var(--text-secondary);">Hech qanday profil mavjud emas.</p>'}
@@ -780,10 +904,11 @@
                     <span style="font-size: 28px;">${p.avatar}</span>
                     <div>
                         <div style="font-weight: 700;">${escapeHtml(p.name)}</div>
+                        <small>${p.role === 'admin' ? 'Admin' : p.passwordHash ? 'User' : 'Eski profil'}</small>
                         ${state.currentUserId === p.id ? '<span class="badge badge-success">Faol</span>' : ''}
                     </div>
                 </div>
-                <button class="btn btn-danger" style="padding: 6px 12px;" onclick="window.deleteProfile('${p.id}')">O'chirish</button>
+                ${state.profiles.find(profile => profile.id === state.currentUserId)?.role === 'admin' && state.currentUserId !== p.id ? `<button class="btn btn-danger" style="padding: 6px 12px;" onclick="window.deleteProfile('${p.id}')">O'chirish</button>` : ''}
             </div>
         `).join('');
 
@@ -804,6 +929,11 @@
                     <div class="form-group">
                         <label>Ism yoki Taxallus</label>
                         <input type="text" id="new-profile-name" class="form-control" placeholder="Masalan: Ali">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Parol</label>
+                        <input type="password" id="new-profile-password" class="form-control" minlength="6" autocomplete="new-password" placeholder="Kamida 6 belgi">
                     </div>
 
                     <div class="form-group">
@@ -839,30 +969,46 @@
         currentSelectedAvatar = avatar;
     };
 
-    window.createNewProfile = function() {
+    window.createNewProfile = async function() {
         const nameInput = document.getElementById('new-profile-name');
+        const passwordInput = document.getElementById('new-profile-password');
         const name = nameInput.value.trim();
+        const password = passwordInput.value;
 
         if (!name) {
             showToast("Iltimos, ismingizni kiriting!", "error");
             return;
         }
 
-        const newProfile = {
-            id: generateUniqueId(),
-            name: name,
-            avatar: currentSelectedAvatar
-        };
+        try {
+            await createUserAccount(name, password, currentSelectedAvatar);
+            showToast("Hisob yaratildi", "success");
+            renderApp();
+        } catch (error) {
+            showToast(error.message, "error");
+        }
+    };
 
-        state.profiles.push(newProfile);
-        state.currentUserId = newProfile.id; // Automatically set as current
-        addNotification(`${newProfile.avatar} ${newProfile.name} yangi profil qo'shdi`, "success");
+    window.moderateUser = function(profileId, action) {
+        const admin = state.profiles.find(profile => profile.id === state.currentUserId);
+        const target = state.profiles.find(profile => profile.id === profileId);
+        if (!window.FamilyUsers.isAdmin(state, admin?.id) || !target || target.role === "admin") return;
+
+        if (action === "warn") {
+            target.warningCount = (target.warningCount || 0) + 1;
+            addNotification(`${target.name} foydalanuvchisiga admin ogohlantirish berdi`, "info");
+        } else if (action === "ban" || action === "unban") {
+            target.isBanned = action === "ban";
+            addNotification(`${target.name} hisobi ${target.isBanned ? 'bloklandi' : 'blokdan chiqarildi'}`, target.isBanned ? "error" : "success");
+        }
+
         saveState();
-        showToast("Yangi profil yaratildi", "success");
         renderApp();
     };
 
     window.deleteProfile = function(profileId) {
+        const admin = state.profiles.find(profile => profile.id === state.currentUserId);
+        if (!window.FamilyUsers.isAdmin(state, admin?.id) || profileId === state.currentUserId) return;
         showConfirmDialog({
             title: "Profilni o'chirish",
             message: "Haqiqatan ham ushbu profilni o'chirmoqchimisiz?",
@@ -986,6 +1132,44 @@
         resetDraft();
         showToast("Test saqlandi va ommaga tayyor", "success");
         navigateTo("tests");
+    };
+
+    window.generateAiQuestions = function() {
+        const topic = document.getElementById("ai-topic").value.trim();
+        const requestedCount = Number.parseInt(document.getElementById("ai-question-count").value, 10);
+        const count = Math.min(10, Math.max(2, Number.isFinite(requestedCount) ? requestedCount : 5));
+        if (!topic) {
+            showToast("Avval test mavzusini yozing.", "error");
+            return;
+        }
+
+        const bank = getAiQuestionBank(topic);
+        const topicKey = topic.toLocaleLowerCase();
+        const history = Array.isArray(state.aiQuestionHistory) ? state.aiQuestionHistory : [];
+        let available = bank.filter(question => !history.includes(`${topicKey}:${question.id}`));
+        if (available.length < count) {
+            state.aiQuestionHistory = [];
+            available = bank;
+        }
+
+        const selected = window.FamilyService.shuffleItems(available).slice(0, count);
+        const generated = selected.map(question => ({
+            ...question,
+            templateId: question.id,
+            id: generateUniqueId(),
+            options: question.options.map(option => ({ ...option }))
+        }));
+        state.aiQuestionHistory = [...(state.aiQuestionHistory || []), ...selected.map(question => `${topicKey}:${question.id}`)].slice(-100);
+
+        const hasExistingQuestions = testDraft.questions.some(question => question.text.trim());
+        if (!hasExistingQuestions) testDraft.questions = [];
+        testDraft.questions.push(...generated);
+        if (!testDraft.title.trim()) testDraft.title = `${topic} testi`;
+        if (!testDraft.description.trim()) testDraft.description = `${topic} mavzusida yordamchi tuzgan savollar.`;
+        window.testDraft = testDraft;
+        saveState();
+        renderApp();
+        showToast(`${generated.length} ta yangi savol tayyorlandi`, "success");
     };
 
     // Test Submission Handler

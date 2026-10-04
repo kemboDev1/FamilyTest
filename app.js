@@ -54,6 +54,8 @@
         questions: []
     };
 
+    window.testDraft = testDraft;
+
     function resetDraft() {
         testDraft = {
             title: "",
@@ -71,6 +73,7 @@
                 }
             ]
         };
+        window.testDraft = testDraft;
     }
 
     // Determine current active page based on URL hash
@@ -171,21 +174,25 @@
                     <aside class="sidebar">
                         <div>
                             <div class="brand">
-                                <div class="brand-icon">⚡</div>
-                                <span>FamilyQuiz</span>
+                                <div class="brand-icon">✦</div>
+                                <span>Family Studio</span>
                             </div>
                             <nav class="nav-menu">
                                 <a class="nav-item ${currentRoute === 'tests' ? 'active' : ''}" data-route="tests">
-                                    📊 Testlar
+                                    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12"/><path d="M8 10h8M8 14h8M8 18h5"/></svg></span>
+                                    <span>Testlar</span>
                                 </a>
                                 <a class="nav-item ${currentRoute === 'builder' ? 'active' : ''}" data-route="builder">
-                                    ➕ Test Yaratish
+                                    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/><rect x="3.5" y="3.5" width="17" height="17" rx="4"/></svg></span>
+                                    <span>Studio</span>
                                 </a>
                                 <a class="nav-item ${currentRoute === 'results' ? 'active' : ''}" data-route="results">
-                                    🏆 Natijalar
+                                    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"/><path d="M12 17V9"/><path d="M7 9l5-5 5 5"/><path d="M5 18h14"/></svg></span>
+                                    <span>Natijalar</span>
                                 </a>
                                 <a class="nav-item ${currentRoute === 'profiles' ? 'active' : ''}" data-route="profiles">
-                                    ⚙️ Profillar
+                                    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1"/><circle cx="10" cy="7" r="4"/><path d="M20 18v-1a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+                                    <span>Profillar</span>
                                 </a>
                             </nav>
                         </div>
@@ -302,11 +309,12 @@
         return `
             <div class="hero-banner">
                 <div>
-                    <h1>Oila va Do'stlar Test Maydoni</h1>
-                    <p>O'zingiz test yarating, yaqinlaringizga ulashing va fikrlarni tahlil qiling.</p>
+                    <span class="hero-tag">Warm Studio</span>
+                    <h1>Family & Friends Luxury Lounge</h1>
+                    <p>O'zingizning eng chiroyli test, quiz va aqliy tanlovni yaratib, ulashib, har bir natijani bezakli uslubda kuzating.</p>
                 </div>
                 <button class="btn btn-secondary" onclick="window.location.hash='builder'">
-                    + Yangi Test Yaratish
+                    ✦ Yangi Test
                 </button>
             </div>
 
@@ -400,18 +408,18 @@
 
         return `
             <div class="card">
-                <h2 style="margin-bottom: 20px;">Yangi Test Yaratish</h2>
+                <h2 style="margin-bottom: 20px;">Create in Studio</h2>
                 
                 <div class="form-group">
                     <label>Test Nomi</label>
                     <input type="text" class="form-control" id="draft-title" placeholder="Masalan: Do'stlik Testi 2026" 
-                           value="${escapeHtml(testDraft.title)}" oninput="testDraft.title = this.value">
+                           value="${escapeHtml(testDraft.title)}" oninput="window.testDraft.title = this.value">
                 </div>
 
                 <div class="form-group">
                     <label>Test Haqida Qisqacha (Tavsif)</label>
                     <textarea class="form-control" id="draft-desc" placeholder="Ushbu test nima haqida..." 
-                              oninput="testDraft.description = this.value">${escapeHtml(testDraft.description)}</textarea>
+                              oninput="window.testDraft.description = this.value">${escapeHtml(testDraft.description)}</textarea>
                 </div>
 
                 <h3 style="margin: 30px 0 15px;">Savollar Ro'yxati</h3>
@@ -636,7 +644,7 @@
                     </div>
 
                     <button class="btn btn-primary" style="margin-top: 15px; width: 100%;" onclick="window.createNewProfile()">
-                        Profilni Saqlash
+                        ✨ Profilni Saqlash
                     </button>
                 </div>
 

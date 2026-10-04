@@ -23,11 +23,15 @@
         currentUserId: null,
         profiles: [],
         tests: [],
-        results: []
+        results: [],
+        notifications: []
     };
 
     // Load or initialize state
-    let state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultDatabase;
+    let state = (() => {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+        return { ...defaultDatabase, ...(saved || {}) };
+    })();
 
     // Helper functions for state modification
     function saveState() {
@@ -133,6 +137,20 @@
         }, 2600);
     }
 
+    function addNotification(message, type = "info") {
+        state.notifications = [
+            {
+                id: generateUniqueId(),
+                message,
+                type,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            },
+            ...state.notifications
+        ].slice(0, 12);
+
+        saveState();
+    }
+
     window.dismissToast = function (id) {
         toastQueue = toastQueue.filter(toast => toast.id !== id);
         renderApp();
@@ -186,9 +204,17 @@
                                     <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/><rect x="3.5" y="3.5" width="17" height="17" rx="4"/></svg></span>
                                     <span>Studio</span>
                                 </a>
+                                <a class="nav-item ${currentRoute === 'leaderboard' ? 'active' : ''}" data-route="leaderboard">
+                                    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18V9"/><path d="M12 18V5"/><path d="M17 18v-7"/><path d="M4 18h16"/></svg></span>
+                                    <span>Leaderboard</span>
+                                </a>
                                 <a class="nav-item ${currentRoute === 'results' ? 'active' : ''}" data-route="results">
                                     <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"/><path d="M12 17V9"/><path d="M7 9l5-5 5 5"/><path d="M5 18h14"/></svg></span>
                                     <span>Natijalar</span>
+                                </a>
+                                <a class="nav-item ${currentRoute === 'admin' ? 'active' : ''}" data-route="admin">
+                                    <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6"/><path d="M12 15v6"/><path d="M3 12h6"/><path d="M15 12h6"/><circle cx="12" cy="12" r="3"/></svg></span>
+                                    <span>Admin</span>
                                 </a>
                                 <a class="nav-item ${currentRoute === 'profiles' ? 'active' : ''}" data-route="profiles">
                                     <span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1"/><circle cx="10" cy="7" r="4"/><path d="M20 18v-1a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
@@ -256,8 +282,12 @@
                 return renderTestsView();
             case "builder":
                 return renderBuilderView();
+            case "leaderboard":
+                return renderLeaderboardView();
             case "results":
                 return renderResultsView();
+            case "admin":
+                return renderAdminView();
             case "profiles":
                 return renderProfilesView();
             default:
@@ -311,11 +341,26 @@
                 <div>
                     <span class="hero-tag">Warm Studio</span>
                     <h1>Family & Friends Luxury Lounge</h1>
-                    <p>O'zingizning eng chiroyli test, quiz va aqliy tanlovni yaratib, ulashib, har bir natijani bezakli uslubda kuzating.</p>
+                    <p>Har bir profil o'z testini yaratishi mumkin, boshqalar ham ko'rib va yechishi mumkin. Bu yerda barcha testlar ochiq, ammo leaderboard va admin panel bilan nazorat ham bor.</p>
                 </div>
                 <button class="btn btn-secondary" onclick="window.location.hash='builder'">
                     ✦ Yangi Test
                 </button>
+            </div>
+
+            <div class="stat-strip">
+                <div class="stat-pill">
+                    <span class="stat-label">Barcha testlar</span>
+                    <strong>${tests.length}</strong>
+                </div>
+                <div class="stat-pill">
+                    <span class="stat-label">Mening testlarim</span>
+                    <strong>${tests.filter(t => t.ownerId === state.currentUserId).length}</strong>
+                </div>
+                <div class="stat-pill">
+                    <span class="stat-label">Umumiy natijalar</span>
+                    <strong>${state.results.length}</strong>
+                </div>
             </div>
 
             <h2 style="margin-bottom: 20px;">Mavjud Testlar</h2>
@@ -598,6 +643,131 @@
         `;
     }
 
+    function renderLeaderboardView() {
+        const rankings = state.profiles.map(profile => {
+            const played = state.results.filter(r => r.playerId === profile.id);
+            const best = played.reduce((bestScore, result) => Math.max(bestScore, result.score), 0);
+            const total = played.reduce((sum, result) => sum + result.score, 0);
+            return {
+                profile,
+                plays: played.length,
+                best,
+                total
+            };
+        }).sort((a, b) => b.best - a.best || b.total - a.total || b.plays - a.plays);
+
+        const rowsHtml = rankings.length
+            ? rankings.map((entry, index) => `
+                <div class="leaderboard-row ${index === 0 ? 'top-rank' : ''}">
+                    <div class="leaderboard-rank">#${index + 1}</div>
+                    <div class="leaderboard-user">
+                        <span class="leaderboard-avatar">${entry.profile.avatar}</span>
+                        <div>
+                            <strong>${escapeHtml(entry.profile.name)}</strong>
+                            <small>${entry.plays} ta o'yin</small>
+                        </div>
+                    </div>
+                    <div class="leaderboard-score">
+                        <span>Best</span>
+                        <strong>${entry.best}</strong>
+                    </div>
+                    <div class="leaderboard-score">
+                        <span>Umumiy</span>
+                        <strong>${entry.total}</strong>
+                    </div>
+                </div>
+            `).join('')
+            : '<p style="color: var(--text-secondary);">Hali leaderboard bo\'sh.</p>';
+
+        return `
+            <div class="card">
+                <h2 style="margin-bottom: 20px;">Leaderboard</h2>
+                <div class="leaderboard-list">
+                    ${rowsHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    function renderAdminView() {
+        const user = state.profiles.find(p => p.id === state.currentUserId);
+
+        const profileStats = state.profiles.map(profile => {
+            const tests = state.tests.filter(t => t.ownerId === profile.id).length;
+            const plays = state.results.filter(r => r.playerId === profile.id).length;
+            return {
+                profile,
+                tests,
+                plays
+            };
+        });
+
+        const latestNotifications = state.notifications.length ? state.notifications : [
+            { message: 'Yangi ogohlantirishlar mavjud emas', type: 'info', time: 'hozir' }
+        ];
+
+        return `
+            <div class="admin-grid">
+                <div class="card">
+                    <h2>Admin Panel</h2>
+                    <p style="color: var(--text-secondary); margin: 10px 0 18px;">
+                        ${user ? `${user.avatar} ${user.name} admin ko'rinishida` : 'Hech qanday profil tanlanmagan.'}
+                    </p>
+                    <div class="admin-metrics">
+                        <div class="mini-stat">
+                            <span>Users</span>
+                            <strong>${state.profiles.length}</strong>
+                        </div>
+                        <div class="mini-stat">
+                            <span>Tests</span>
+                            <strong>${state.tests.length}</strong>
+                        </div>
+                        <div class="mini-stat">
+                            <span>Results</span>
+                            <strong>${state.results.length}</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Ogohlantirishlar</h3>
+                    <div class="notification-list">
+                        ${latestNotifications.map(item => `
+                            <div class="notification-item ${item.type}">
+                                <span class="notif-dot"></span>
+                                <div>
+                                    <strong>${escapeHtml(item.message)}</strong>
+                                    <small>${escapeHtml(item.time || 'hozir')}</small>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Userlar va testlar</h3>
+                <div class="profile-admin-list">
+                    ${profileStats.map(item => `
+                        <div class="profile-admin-row">
+                            <div class="profile-admin-main">
+                                <span class="leaderboard-avatar">${item.profile.avatar}</span>
+                                <div>
+                                    <strong>${escapeHtml(item.profile.name)}</strong>
+                                    <small>${item.tests} ta test • ${item.plays} ta o'ynagan</small>
+                                </div>
+                            </div>
+                            <div class="profile-admin-badges">
+                                <span class="badge badge-primary">${item.tests} tests</span>
+                                <span class="badge badge-success">${item.plays} plays</span>
+                            </div>
+                        </div>
+                    `).join('') || '<p style="color: var(--text-secondary);">Hech qanday profil mavjud emas.</p>'}
+                </div>
+            </div>
+        `;
+    }
+
     // ==========================================
     // VIEW 5: PROFILES MANAGEMENT
     // ==========================================
@@ -686,6 +856,7 @@
 
         state.profiles.push(newProfile);
         state.currentUserId = newProfile.id; // Automatically set as current
+        addNotification(`${newProfile.avatar} ${newProfile.name} yangi profil qo'shdi`, "success");
         saveState();
         showToast("Yangi profil yaratildi", "success");
         renderApp();
@@ -698,10 +869,12 @@
             confirmText: "O'chirish",
             cancelText: "Bekor qilish"
         }, () => {
+            const removed = state.profiles.find(p => p.id === profileId);
             state.profiles = state.profiles.filter(p => p.id !== profileId);
             if (state.currentUserId === profileId) {
                 state.currentUserId = state.profiles.length > 0 ? state.profiles[0].id : null;
             }
+            addNotification(`${removed ? removed.avatar + ' ' + removed.name : 'Profil'} tizimdan chiqarildi`, "error");
             saveState();
             showToast("Profil o'chirildi", "success");
             renderApp();
@@ -715,7 +888,9 @@
             confirmText: "O'chirish",
             cancelText: "Bekor qilish"
         }, () => {
+            const removed = state.tests.find(t => t.id === testId);
             state.tests = state.tests.filter(t => t.id !== testId);
+            addNotification(`${removed ? removed.title : 'Test'} o'chirildi`, "error");
             saveState();
             showToast("Test muvaffaqiyatli o'chirildi", "success");
             renderApp();
@@ -806,6 +981,7 @@
         };
 
         state.tests.push(newTest);
+        addNotification(`${newTest.title} yangi test qo'shildi`, "success");
         saveState();
         resetDraft();
         showToast("Test saqlandi va ommaga tayyor", "success");
@@ -876,6 +1052,8 @@
         };
 
         state.results.push(resultRecord);
+        const profile = state.profiles.find(p => p.id === state.currentUserId);
+        addNotification(`${profile ? profile.avatar + ' ' + profile.name : 'Foydalanuvchi'} ${test.title} testini yakunladi`, "success");
         saveState();
         navigateTo("results");
     };

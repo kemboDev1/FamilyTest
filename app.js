@@ -38,6 +38,15 @@
         return 'id_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
     }
 
+    function escapeHtml(value = "") {
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
     // Temporary storage for test creation builder
     let testDraft = {
         title: "",
@@ -74,6 +83,76 @@
         window.location.hash = route;
     }
 
+    let toastQueue = [];
+    let pendingConfirm = null;
+
+    function renderToasts() {
+        if (!toastQueue.length) return "";
+        return `
+            <div class="toast-stack">
+                ${toastQueue.map(toast => `
+                    <div class="toast toast-${toast.type}" data-toast-id="${toast.id}">
+                        <div class="toast-icon">${toast.type === 'success' ? '✓' : toast.type === 'error' ? '!' : 'i'}</div>
+                        <div class="toast-text">${escapeHtml(toast.message)}</div>
+                        <button class="toast-close" onclick="window.dismissToast('${toast.id}')">×</button>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    function renderConfirmModal() {
+        if (!pendingConfirm) return "";
+        return `
+            <div class="modal-backdrop" onclick="window.closeConfirmModal()">
+                <div class="modal-card" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <div class="modal-badge">⚡</div>
+                        <h3>${escapeHtml(pendingConfirm.title)}</h3>
+                    </div>
+                    <p>${escapeHtml(pendingConfirm.message)}</p>
+                    <div class="modal-actions">
+                        <button class="btn btn-secondary" onclick="window.closeConfirmModal()">${escapeHtml(pendingConfirm.cancelText)}</button>
+                        <button class="btn btn-primary" onclick="window.confirmAction(true)">${escapeHtml(pendingConfirm.confirmText)}</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function showToast(message, type = "info") {
+        const id = generateUniqueId();
+        toastQueue.push({ id, message, type });
+        renderApp();
+        window.setTimeout(() => {
+            toastQueue = toastQueue.filter(toast => toast.id !== id);
+            renderApp();
+        }, 2600);
+    }
+
+    window.dismissToast = function (id) {
+        toastQueue = toastQueue.filter(toast => toast.id !== id);
+        renderApp();
+    };
+
+    function showConfirmDialog({ title, message, confirmText = "Tasdiqlash", cancelText = "Bekor qilish" }, onConfirm) {
+        pendingConfirm = { title, message, confirmText, cancelText, onConfirm };
+        renderApp();
+    }
+
+    window.closeConfirmModal = function () {
+        pendingConfirm = null;
+        renderApp();
+    };
+
+    window.confirmAction = function (confirmed) {
+        if (confirmed && pendingConfirm && typeof pendingConfirm.onConfirm === "function") {
+            pendingConfirm.onConfirm();
+        }
+        pendingConfirm = null;
+        renderApp();
+    };
+
     // Main App Renderer
     function renderApp() {
         const root = document.getElementById("app");
@@ -84,54 +163,61 @@
 
         // Shell Structure
         root.innerHTML = `
-            <div class="app-container">
-                <aside class="sidebar">
-                    <div>
-                        <div class="brand">
-                            <div class="brand-icon">⚡</div>
-                            <span>FamilyQuiz</span>
+            <div class="app-shell">
+                <div class="ambient ambient-one"></div>
+                <div class="ambient ambient-two"></div>
+                <div class="ambient ambient-three"></div>
+                <div class="app-container">
+                    <aside class="sidebar">
+                        <div>
+                            <div class="brand">
+                                <div class="brand-icon">⚡</div>
+                                <span>FamilyQuiz</span>
+                            </div>
+                            <nav class="nav-menu">
+                                <a class="nav-item ${currentRoute === 'tests' ? 'active' : ''}" data-route="tests">
+                                    📊 Testlar
+                                </a>
+                                <a class="nav-item ${currentRoute === 'builder' ? 'active' : ''}" data-route="builder">
+                                    ➕ Test Yaratish
+                                </a>
+                                <a class="nav-item ${currentRoute === 'results' ? 'active' : ''}" data-route="results">
+                                    🏆 Natijalar
+                                </a>
+                                <a class="nav-item ${currentRoute === 'profiles' ? 'active' : ''}" data-route="profiles">
+                                    ⚙️ Profillar
+                                </a>
+                            </nav>
                         </div>
-                        <nav class="nav-menu">
-                            <a class="nav-item ${currentRoute === 'tests' ? 'active' : ''}" data-route="tests">
-                                📊 Testlar
-                            </a>
-                            <a class="nav-item ${currentRoute === 'builder' ? 'active' : ''}" data-route="builder">
-                                ➕ Test Yaratish
-                            </a>
-                            <a class="nav-item ${currentRoute === 'results' ? 'active' : ''}" data-route="results">
-                                🏆 Natijalar
-                            </a>
-                            <a class="nav-item ${currentRoute === 'profiles' ? 'active' : ''}" data-route="profiles">
-                                ⚙️ Profillar
-                            </a>
-                        </nav>
-                    </div>
-                </aside>
-                
-                <main class="main-content">
-                    <header class="topbar">
-                        <div class="topbar-user">
-                            ${renderCurrentUserBadge()}
-                        </div>
-                        <div class="topbar-actions">
-                            <select id="global-profile-switcher" class="profile-select">
-                                <option value="">-- Profil Tanlang --</option>
-                                ${state.profiles.map(p => `
-                                    <option value="${p.id}" ${state.currentUserId === p.id ? 'selected' : ''}>
-                                        ${p.avatar}${p.name}
-                                    </option>
-                                `).join('')}
-                            </select>
-                            <button id="theme-toggle-btn" class="theme-toggle-btn" title="Mavzuni o'zgartirish">
-                                ${state.theme === 'dark' ? '☀️' : '🌙'}
-                            </button>
-                        </div>
-                    </header>
+                    </aside>
                     
-                    <div class="content-body">
-                        ${renderRouteContent(currentRoute)}
-                    </div>
-                </main>
+                    <main class="main-content">
+                        <header class="topbar">
+                            <div class="topbar-user">
+                                ${renderCurrentUserBadge()}
+                            </div>
+                            <div class="topbar-actions">
+                                <select id="global-profile-switcher" class="profile-select">
+                                    <option value="">-- Profil Tanlang --</option>
+                                    ${state.profiles.map(p => `
+                                        <option value="${p.id}" ${state.currentUserId === p.id ? 'selected' : ''}>
+                                            ${p.avatar}${p.name}
+                                        </option>
+                                    `).join('')}
+                                </select>
+                                <button id="theme-toggle-btn" class="theme-toggle-btn" title="Mavzuni o'zgartirish">
+                                    ${state.theme === 'dark' ? '☀️' : '🌙'}
+                                </button>
+                            </div>
+                        </header>
+                        
+                        <div class="content-body">
+                            ${renderRouteContent(currentRoute)}
+                        </div>
+                    </main>
+                </div>
+                ${renderToasts()}
+                ${renderConfirmModal()}
             </div>
         `;
 
@@ -580,7 +666,7 @@
         const name = nameInput.value.trim();
 
         if (!name) {
-            alert("Iltimos, ismingizni kiriting!");
+            showToast("Iltimos, ismingizni kiriting!", "error");
             return;
         }
 
@@ -593,26 +679,39 @@
         state.profiles.push(newProfile);
         state.currentUserId = newProfile.id; // Automatically set as current
         saveState();
+        showToast("Yangi profil yaratildi", "success");
         renderApp();
     };
 
     window.deleteProfile = function(profileId) {
-        if (confirm("Haqiqatan ham ushbu profilni o'chirmoqchimisiz?")) {
+        showConfirmDialog({
+            title: "Profilni o'chirish",
+            message: "Haqiqatan ham ushbu profilni o'chirmoqchimisiz?",
+            confirmText: "O'chirish",
+            cancelText: "Bekor qilish"
+        }, () => {
             state.profiles = state.profiles.filter(p => p.id !== profileId);
             if (state.currentUserId === profileId) {
                 state.currentUserId = state.profiles.length > 0 ? state.profiles[0].id : null;
             }
             saveState();
+            showToast("Profil o'chirildi", "success");
             renderApp();
-        }
+        });
     };
 
     window.deleteTest = function(testId) {
-        if (confirm("Ushbu testni o'chirib tashlamoqchimisiz?")) {
+        showConfirmDialog({
+            title: "Testni o'chirish",
+            message: "Ushbu testni o'chirib tashlamoqchimisiz?",
+            confirmText: "O'chirish",
+            cancelText: "Bekor qilish"
+        }, () => {
             state.tests = state.tests.filter(t => t.id !== testId);
             saveState();
+            showToast("Test muvaffaqiyatli o'chirildi", "success");
             renderApp();
-        }
+        });
     };
 
     // Draft Builder Functions
@@ -678,14 +777,14 @@
 
     window.saveTestDraft = function() {
         if (!testDraft.title.trim()) {
-            alert("Testga nom bering!");
+            showToast("Testga nom bering!", "error");
             return;
         }
 
         for (let i = 0; i < testDraft.questions.length; i++) {
             const q = testDraft.questions[i];
             if (!q.text.trim()) {
-                alert(`${i + 1}-savol matni kiritilmagan!`);
+                showToast(`${i + 1}-savol matni kiritilmagan!`, "error");
                 return;
             }
         }
@@ -701,6 +800,7 @@
         state.tests.push(newTest);
         saveState();
         resetDraft();
+        showToast("Test saqlandi va ommaga tayyor", "success");
         navigateTo("tests");
     };
 
